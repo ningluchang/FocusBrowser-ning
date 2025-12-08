@@ -53,7 +53,7 @@ export function extractHostname(url: string): string {
     return hostname;
 }
 
-export async function isUrlBlocked(targetUrl: string): Promise<boolean> {
+export async function isUrlBlocked(targetUrl: string): Promise<BlacklistEntry | null> {
     const list = await getBlacklist();
     const now = Date.now();
 
@@ -61,11 +61,11 @@ export async function isUrlBlocked(targetUrl: string): Promise<boolean> {
     // 比如访问: "https://m.baidu.com/news" -> 得到 "m.baidu.com"
     const targetHost = extractHostname(targetUrl);
 
-    if (!targetHost) return false;
+    if (!targetHost) return null;
 
-    return list.some(entry => {
+    for (const entry of list){
         // 检查是否过期
-        if (entry.unlockAt <= now) return false;
+        if (entry.unlockAt <= now) return null;
 
         // 2. 获取黑名单里的主域 (你保证了它是 "baidu.com")
         const blockedDomain = entry.url.toLowerCase();
@@ -75,7 +75,7 @@ export async function isUrlBlocked(targetUrl: string): Promise<boolean> {
         // 情况 A: 完全相等
         // 访问 "baidu.com" === 黑名单 "baidu.com"
         if (targetHost === blockedDomain) {
-            return true;
+            return entry;
         }
 
         // 情况 B: 子域名匹配
@@ -83,9 +83,8 @@ export async function isUrlBlocked(targetUrl: string): Promise<boolean> {
         // 访问 "www.baidu.com" 结尾是 ".baidu.com"
         // 必须加 "." 主要是为了防止 "mybaidu.com" (假冒网站) 被错误拦截
         if (targetHost.endsWith('.' + blockedDomain)) {
-            return true;
+            return entry;
         }
-
-        return false;
-    });
+    }
+    return null;
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
     SafeAreaView,
     View,
@@ -10,14 +10,15 @@ import {
     Text,
     TouchableOpacity,
     Alert,
+    BackHandler
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { addToBlacklist, isUrlBlocked } from './utils/blacklist';
+import { formatDuration } from './utils/time_fmt';
 import BlacklistConfig from './components/BlacklistConfig';
 import AddSiteTab from './components/AddSiteTab';
 import LockSiteTab from './components/LockSiteTab';
 import BlacklistStatusTab from './components/BlacklistStatusTab';
-
 
 const App = () => {
     const [url, setUrl] = useState<string>(''); // 当前加载的 URL
@@ -27,23 +28,33 @@ const App = () => {
     const allowUrlRef = useRef<string | null>(null);
     const [showSettings, setShowSettings] = useState(false);
     const [tabIndex, setTabIndex] = useState<'add' | 'lock' | 'status'>('add');
+    const [blockedSiteInfo, setBlockedSiteInfo] = useState<{
+        site: string;
+        remainingMs: number;
+    } | null>(null);
 
     const handleLoad = async () => {
-        let formattedUrl = inputUrl.trim();
+        let formattedUrl = inputUrl;
         if (!formattedUrl.startsWith('http')) {
             formattedUrl = 'https://' + formattedUrl;
         }
 
         const shouldBlock = await isUrlBlocked(formattedUrl);
         if (shouldBlock) {
+            const remaining = shouldBlock.unlockAt - Date.now();
             setShowBlocked(true);
             setUrl(''); // 清空当前加载页
+            setBlockedSiteInfo({
+                site: shouldBlock.url,
+                remainingMs: remaining,
+            });
             allowUrlRef.current = null;
             return;
         }
 
         setShowBlocked(false);
         allowUrlRef.current = formattedUrl; // 标记为允许加载
+        setBlockedSiteInfo(null);
         setUrl(formattedUrl);
     };
 
@@ -58,6 +69,21 @@ const App = () => {
     const reload = () => {
         webViewRef.current?.reload();
     };
+    useEffect(() => {
+        if (!showBlocked || !blockedSiteInfo) return;
+
+        const interval = setInterval(() => {
+            setBlockedSiteInfo((prev) => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    remainingMs: Math.max(prev.remainingMs - 1000, 0),
+                };
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [showBlocked, blockedSiteInfo]);
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -87,19 +113,28 @@ const App = () => {
                         {/* Tab 切换头部按钮 */}
                         <View style={styles.tabHeader}>
                             <TouchableOpacity
-                                style={[styles.tabButton, tabIndex === 'add' && styles.tabButtonActive]}
+                                style={[
+                                    styles.tabButton,
+                                    tabIndex === 'add' && styles.tabButtonActive,
+                                ]}
                                 onPress={() => setTabIndex('add')}
                             >
                                 <Text>➕ 添加网站</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.tabButton, tabIndex === 'lock' && styles.tabButtonActive]}
+                                style={[
+                                    styles.tabButton,
+                                    tabIndex === 'lock' && styles.tabButtonActive,
+                                ]}
                                 onPress={() => setTabIndex('lock')}
                             >
                                 <Text>🔒 锁定全部</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.tabButton, tabIndex === 'status' && styles.tabButtonActive]}
+                                style={[
+                                    styles.tabButton,
+                                    tabIndex === 'status' && styles.tabButtonActive,
+                                ]}
                                 onPress={() => setTabIndex('status')}
                             >
                                 <Text>📋 当前锁定</Text>
@@ -116,17 +151,29 @@ const App = () => {
                         ref={webViewRef}
                         source={{ uri: url }}
                         style={styles.webview}
-                        onShouldStartLoadWithRequest={(request) => {
-                            const allowed = allowUrlRef.current;
-                            const isSafe = !!allowed && request.url.startsWith(allowed);
-                            return isSafe;
+                        onShouldStartLoadWithRequest={request => {
+                            const currentAllowed = allowUrlRef.current;
+                            return !!currentAllowed && request.url.startsWith(currentAllowed);
                         }}
                     />
                 ) : showBlocked ? (
                     <View style={styles.blockedContainer}>
                         <Text style={styles.blockedTitle}>⚠️ 网站已被锁定</Text>
-                        <Text style={styles.blockedText}>你在设置中锁定了此网站</Text>
-                        <Text style={styles.blockedText}>请关掉当前标签页</Text>
+
+                        {blockedSiteInfo && (
+                            <>
+                                <Text style={styles.blockedText}>
+                                    你试图访问：{blockedSiteInfo.site}
+                                </Text>
+                                <Text style={styles.blockedText}>
+                                    剩余时间：{formatDuration(blockedSiteInfo.remainingMs)}
+                                </Text>
+                            </>
+                        )}
+
+                        <Text style={styles.blockedText}>
+                            🧘‍♂️ 请立刻关闭本页面，专注你的目标 💪
+                        </Text>
                     </View>
                 ) : (
                     <View style={styles.placeholder}>

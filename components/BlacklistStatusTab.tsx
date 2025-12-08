@@ -10,14 +10,24 @@ const formatRemainingTime = (ms: number) => {
     const days = Math.floor(totalSeconds / (24 * 3600));
     const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60; // 新增秒数计算
 
-    if (days > 0) return `${days}天${hours}小时`;
-    if (hours > 0) return `${hours}小时${minutes}分钟`;
-    return `${minutes}分钟`;
+    // 根据不同时间范围显示不同精度
+    if (days > 0) {
+        return `${days}天${hours}小时${minutes}分钟${seconds}秒`;
+    }
+    if (hours > 0) {
+        return `${hours}小时${minutes}分钟${seconds}秒`;
+    }
+    if (minutes > 0) {
+        return `${minutes}分钟${seconds}秒`;
+    }
+    return `${seconds}秒`; // 仅剩秒数时直接显示
 };
 
 const BlacklistStatusTab = () => {
     const [entries, setEntries] = useState<BlacklistEntry[]>([]);
+    const [now, setNow] = useState(Date.now());
 
     const load = async () => {
         const list = await getBlacklist();
@@ -25,17 +35,22 @@ const BlacklistStatusTab = () => {
     };
 
     useEffect(() => {
-        load();
+        load(); // 初次加载黑名单列表
 
-        // 每分钟刷新下锁定时间
-        const interval = setInterval(() => {
+        const refreshTimer = setInterval(() => {
             load();
-        }, 60_000);
+        }, 60_000); // 每分钟更新一次真实数据
 
-        return () => clearInterval(interval);
+        return () => clearInterval(refreshTimer);
     }, []);
 
-    const now = Date.now();
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setNow(Date.now());
+        }, 1000); // 每秒更新当前时间（只触发render，不刷新数据）
+
+        return () => clearInterval(timer);
+    }, []);
 
     return (
         <View style={styles.container}>
