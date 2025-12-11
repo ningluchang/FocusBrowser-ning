@@ -1,16 +1,10 @@
 // components/LockSiteTab.tsx
 
 import React, { useEffect, useState } from 'react';
-import {
-    View,
-    Text,
-    Button,
-    TouchableOpacity,
-    Alert,
-    StyleSheet,
-} from 'react-native';
+import { View, Text, Button, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addToBlacklist } from '../utils/blacklist';
+import { isGlobalLocked, setGlobalLockUntil } from '../utils/lockStorage';
 
 const ADD_KEY = 'FocusBrowser:siteConfig';
 
@@ -28,15 +22,19 @@ const durations = [
 
 const LockSiteTab = () => {
     const [duration, setDuration] = useState(durations[1].value); // 默认一小时锁定
+    const [locked, setLocked] = useState(false);
 
     const handleLockAll = async () => {
         const stored = await AsyncStorage.getItem(ADD_KEY);
         const savedSites: string[] = stored ? JSON.parse(stored) : [];
+        const now = Date.now();
+        const unlockAt = now + duration;
 
         if (savedSites.length === 0) {
             Alert.alert('没有添加任何网站', '请先在“添加网站”页添加要屏蔽的网址');
             return;
         }
+        await setGlobalLockUntil(unlockAt);
 
         for (const site of savedSites) {
             await addToBlacklist(site, duration);
@@ -50,6 +48,17 @@ const LockSiteTab = () => {
         if (ms < 24 * 60 * 60 * 1000) return `${ms / (60 * 60 * 1000)} 小时`;
         return `${ms / (24 * 60 * 60 * 1000)} 天`;
     };
+    useEffect(() => {
+        const check = async () => {
+            const lock = await isGlobalLocked();
+            setLocked(lock);
+        };
+
+        check();
+
+        const interval = setInterval(check, 60_000); // 每分钟刷新一次
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <View style={styles.container}>
@@ -57,23 +66,22 @@ const LockSiteTab = () => {
 
             <Text style={styles.subtitle}>请选择锁定时长：</Text>
             <View style={styles.timeOptions}>
-                {durations.map((item) => (
+                {durations.map(item => (
                     <TouchableOpacity
                         key={item.value}
-                        style={[
-                            styles.timeOption,
-                            duration === item.value && styles.selected,
-                        ]}
+                        style={[styles.timeOption, duration === item.value && styles.selected]}
                         onPress={() => setDuration(item.value)}
                     >
-                        <Text style={duration === item.value ? styles.selectedText : styles.optionText}>
-                            {item.label}
-                        </Text>
+                        <Text style={duration === item.value ? styles.selectedText : styles.optionText}>{item.label}</Text>
                     </TouchableOpacity>
                 ))}
             </View>
 
-            <Button title="立即锁定全部" onPress={handleLockAll} />
+            <Button
+                title="立即锁定全部"
+                onPress={handleLockAll}
+                disabled={locked}
+            />
         </View>
     );
 };

@@ -1,17 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import {
-    SafeAreaView,
-    View,
-    TextInput,
-    Button,
-    StyleSheet,
-    StatusBar,
-    Platform,
-    Text,
-    TouchableOpacity,
-    Alert,
-    BackHandler
-} from 'react-native';
+import { SafeAreaView, View, TextInput, Button, StyleSheet, StatusBar, Platform, Text, TouchableOpacity, Alert, BackHandler } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { addToBlacklist, isUrlBlocked } from './utils/blacklist';
 import { formatDuration } from './utils/time_fmt';
@@ -19,6 +7,13 @@ import BlacklistConfig from './components/BlacklistConfig';
 import AddSiteTab from './components/AddSiteTab';
 import LockSiteTab from './components/LockSiteTab';
 import BlacklistStatusTab from './components/BlacklistStatusTab';
+import SearchEngineSettings from './components/SearchEngineSettings';
+import { getDefaultSearchEngine } from './utils/searchEngineStorage';
+import { searchEngines } from './utils/searchEngines';
+import { encouragements } from './utils/encouragements';
+import { saveHistory } from './utils/historyStorage';
+import HistoryPage from './components/HistoryPage';
+import SettingsContainer from './components/SettingsContainer';
 
 const App = () => {
     const [url, setUrl] = useState<string>(''); // 当前加载的 URL
@@ -27,35 +22,157 @@ const App = () => {
     const [showBlocked, setShowBlocked] = useState(false);
     const allowUrlRef = useRef<string | null>(null);
     const [showSettings, setShowSettings] = useState(false);
-    const [tabIndex, setTabIndex] = useState<'add' | 'lock' | 'status'>('add');
+    type TabIndex = 'add' | 'lock' | 'status' | 'search' | 'history';
+    const [tabIndex, setTabIndex] = useState<TabIndex>('add');
     const [blockedSiteInfo, setBlockedSiteInfo] = useState<{
         site: string;
         remainingMs: number;
     } | null>(null);
+    const [progress, setProgress] = useState(0);
+    const [encourage, setEncourage] = useState('');
+    const [isInSettings, setIsInSettings] = useState(false);
+    const [settingsPage, setSettingsPage] = useState<string>(''); // '' 表示主设置页
+
+    function isLikelyUrl(input: string): boolean {
+        if (input.includes(' ')) return false; // 空格 -> 明显是关键词
+        if (/^[a-zA-Z]+:\/\//.test(input)) return true; // http:// https://
+        if (/\.[a-z]{2,}$/.test(input)) return true; // abc.com
+        return false;
+    }
 
     const handleLoad = async () => {
-        let formattedUrl = inputUrl;
-        if (!formattedUrl.startsWith('http')) {
-            formattedUrl = 'https://' + formattedUrl;
+        let input = inputUrl.trim();
+        if (!input) return;
+
+        let targetUrl = '';
+        const engineName = await getDefaultSearchEngine();
+        const engine = searchEngines.find(e => e.value === engineName) || searchEngines[0];
+
+        if (isLikelyUrl(input)) {
+            if (!input.startsWith('http')) {
+                input = `https://${input}`;
+            }
+            targetUrl = input;
+        } else {
+            // 如果输入的是关键词：使用搜索引擎
+            targetUrl = engine.url(input);
         }
 
-        const shouldBlock = await isUrlBlocked(formattedUrl);
-        if (shouldBlock) {
-            const remaining = shouldBlock.unlockAt - Date.now();
+        const matched = await isUrlBlocked(targetUrl);
+        if (matched) {
             setShowBlocked(true);
-            setUrl(''); // 清空当前加载页
             setBlockedSiteInfo({
-                site: shouldBlock.url,
-                remainingMs: remaining,
+                site: matched.url,
+                remainingMs: matched.unlockAt - Date.now(),
+            });
+            setEncourage(encouragements[Math.floor(Math.random() * encouragements.length)]);
+
+            allowUrlRef.current = null;
+            return;
+        }
+
+        allowUrlRef.current = targetUrl;
+        setShowBlocked(false);
+        setBlockedSiteInfo(null);
+        setUrl(targetUrl);
+    };
+
+    const renderSettingsPage = () => {
+        // 主设置菜单页面
+        if (settingsPage === '') {
+            return (
+                <SettingsContainer
+                    title="设置"
+                    onBack={() => setIsInSettings(false)}
+                >
+                    <View>
+                        {[
+                            { label: '📥 添加网站', id: 'add' },
+                            { label: '🔒 锁定全部', id: 'lock' },
+                            { label: '🧭 当前锁定', id: 'status' },
+                            { label: '🔍 搜索引擎', id: 'search' },
+                            { label: '📜 历史记录', id: 'history' },
+                        ].map(item => (
+                            <TouchableOpacity
+                                key={item.id}
+                                onPress={() => setSettingsPage(item.id)}
+                                style={{ paddingVertical: 14, borderBottomWidth: 1, borderColor: '#eee' }}
+                            >
+                                <Text style={{ fontSize: 16 }}>{item.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </SettingsContainer>
+            );
+        }
+
+        // 子页面设置
+        const back = () => setSettingsPage('');
+        if (settingsPage === 'add')
+            return (
+                <SettingsContainer
+                    onBack={back}
+                    title="添加网站"
+                >
+                    <AddSiteTab />
+                </SettingsContainer>
+            );
+        if (settingsPage === 'lock')
+            return (
+                <SettingsContainer
+                    onBack={back}
+                    title="锁定全部"
+                >
+                    <LockSiteTab />
+                </SettingsContainer>
+            );
+        if (settingsPage === 'status')
+            return (
+                <SettingsContainer
+                    onBack={back}
+                    title="当前锁定"
+                >
+                    <BlacklistStatusTab />
+                </SettingsContainer>
+            );
+        if (settingsPage === 'search')
+            return (
+                <SettingsContainer
+                    onBack={back}
+                    title="搜索设置"
+                >
+                    <SearchEngineSettings />
+                </SettingsContainer>
+            );
+        if (settingsPage === 'history')
+            return (
+                <SettingsContainer
+                    onBack={back}
+                    title="浏览历史"
+                >
+                    <HistoryPage />
+                </SettingsContainer>
+            );
+
+        return null;
+    };
+
+    const handleLoadUrlFromHistory = async (targetUrl: string) => {
+        const matched = await isUrlBlocked(targetUrl);
+        if (matched) {
+            setShowBlocked(true);
+            setBlockedSiteInfo({
+                site: matched.url,
+                remainingMs: matched.unlockAt - Date.now(),
             });
             allowUrlRef.current = null;
             return;
         }
 
         setShowBlocked(false);
-        allowUrlRef.current = formattedUrl; // 标记为允许加载
         setBlockedSiteInfo(null);
-        setUrl(formattedUrl);
+        allowUrlRef.current = targetUrl;
+        setUrl(targetUrl);
     };
 
     const goBack = () => {
@@ -73,7 +190,7 @@ const App = () => {
         if (!showBlocked || !blockedSiteInfo) return;
 
         const interval = setInterval(() => {
-            setBlockedSiteInfo((prev) => {
+            setBlockedSiteInfo(prev => {
                 if (!prev) return null;
                 return {
                     ...prev,
@@ -84,6 +201,48 @@ const App = () => {
 
         return () => clearInterval(interval);
     }, [showBlocked, blockedSiteInfo]);
+    const handleBack = () => {
+        // 如果在提示页面
+        if (showBlocked) {
+            setShowBlocked(false);
+            return true;
+        }
+
+        // 如果在设置页
+        if (showSettings) {
+            if (tabIndex !== 'add') {
+                setTabIndex('add');
+                return true;
+            }
+            setShowSettings(false);
+            return true;
+        }
+
+        // 如果当前有网页
+        if (url) {
+            setUrl('');
+            return true;
+        }
+
+        return false; // 系统决定要不要退出App
+    };
+
+    useEffect(() => {
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+            if (isInSettings){
+                if (settingsPage !== ''){
+                    setSettingsPage('');
+                }else{
+                    setIsInSettings(false);
+                }
+                return true;
+            }
+            const handled = handleBack();
+            return handled;
+        });
+
+        return () => backHandler.remove();
+    }, [showBlocked, showSettings, tabIndex, url]);
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -95,65 +254,62 @@ const App = () => {
 
             {/* 地址栏 */}
             <View style={styles.searchBarContainer}>
-                <TextInput
-                    style={styles.input}
-                    placeholder="请输入网址"
-                    value={inputUrl}
-                    onChangeText={setInputUrl}
-                    onSubmitEditing={handleLoad}
-                    returnKeyType="go"
-                />
-                <Button title="跳转" onPress={handleLoad} />
+                <View style={styles.inputWrapper}>
+                    <TextInput
+                        style={styles.textInput}
+                        value={inputUrl}
+                        onChangeText={setInputUrl}
+                        placeholder="请输入网址或搜索关键词"
+                        returnKeyType="go"
+                        onSubmitEditing={handleLoad}
+                    />
+
+                    {/* 内嵌的清除按钮 */}
+                    {inputUrl.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => setInputUrl('')}
+                            style={styles.clearIcon}
+                        >
+                            <Text style={styles.clearIconText}>✖</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* 外部的“前往”按钮 */}
+                <TouchableOpacity
+                    onPress={handleLoad}
+                    style={styles.searchButton}
+                >
+                    <Text style={styles.searchButtonText}>前往</Text>
+                </TouchableOpacity>
             </View>
+            {/* ✅ 加进度条组件在搜索框下 */}
+            {progress < 1 && (
+                <View style={styles.progressBarContainer}>
+                    <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+                </View>
+            )}
 
             {/* 内容区域 */}
             <View style={styles.content}>
-                {showSettings ? (
-                    <>
-                        {/* Tab 切换头部按钮 */}
-                        <View style={styles.tabHeader}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.tabButton,
-                                    tabIndex === 'add' && styles.tabButtonActive,
-                                ]}
-                                onPress={() => setTabIndex('add')}
-                            >
-                                <Text>➕ 添加网站</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    styles.tabButton,
-                                    tabIndex === 'lock' && styles.tabButtonActive,
-                                ]}
-                                onPress={() => setTabIndex('lock')}
-                            >
-                                <Text>🔒 锁定全部</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    styles.tabButton,
-                                    tabIndex === 'status' && styles.tabButtonActive,
-                                ]}
-                                onPress={() => setTabIndex('status')}
-                            >
-                                <Text>📋 当前锁定</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Tab 实际页面内容 */}
-                        {tabIndex === 'add' && <AddSiteTab />}
-                        {tabIndex === 'lock' && <LockSiteTab />}
-                        {tabIndex === 'status' && <BlacklistStatusTab />}
-                    </>
+                {isInSettings ? (
+                    renderSettingsPage()
                 ) : url && !showBlocked ? (
                     <WebView
                         ref={webViewRef}
                         source={{ uri: url }}
                         style={styles.webview}
+                        onLoadProgress={({ nativeEvent }) => {
+                            setProgress(nativeEvent.progress);
+                        }}
                         onShouldStartLoadWithRequest={request => {
                             const currentAllowed = allowUrlRef.current;
                             return !!currentAllowed && request.url.startsWith(currentAllowed);
+                        }}
+                        onLoadEnd={() => {
+                            if (url) {
+                                saveHistory(url);
+                            }
                         }}
                     />
                 ) : showBlocked ? (
@@ -162,18 +318,13 @@ const App = () => {
 
                         {blockedSiteInfo && (
                             <>
-                                <Text style={styles.blockedText}>
-                                    你试图访问：{blockedSiteInfo.site}
-                                </Text>
-                                <Text style={styles.blockedText}>
-                                    剩余时间：{formatDuration(blockedSiteInfo.remainingMs)}
-                                </Text>
+                                <Text style={styles.blockedText}>你试图访问：{blockedSiteInfo.site}</Text>
+                                <Text style={styles.blockedText}>剩余时间：{formatDuration(blockedSiteInfo.remainingMs)}</Text>
+                                <Text style={styles.blockedText}>请关闭此页面，回归专注</Text>
                             </>
                         )}
 
-                        <Text style={styles.blockedText}>
-                            🧘‍♂️ 请立刻关闭本页面，专注你的目标 💪
-                        </Text>
+                        <Text style={styles.encourageText}>{encourage}</Text>
                     </View>
                 ) : (
                     <View style={styles.placeholder}>
@@ -185,8 +336,8 @@ const App = () => {
 
             {/* 底部工具栏 */}
             <View style={styles.toolbar}>
-                <TouchableOpacity onPress={goBack}>
-                    <Text style={styles.toolButton}>◀ 返回</Text>
+                <TouchableOpacity onPress={handleBack}>
+                    <Text>◀ 返回</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={goForward}>
                     <Text style={styles.toolButton}>▶ 前进</Text>
@@ -194,8 +345,13 @@ const App = () => {
                 <TouchableOpacity onPress={reload}>
                     <Text style={styles.toolButton}>↻ 刷新</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShowSettings(prev => !prev)}>
-                    <Text style={styles.toolButton}>⚙ 设置</Text>
+                <TouchableOpacity
+                    onPress={() => {
+                        setIsInSettings(true);
+                        setSettingsPage(''); // 主设置页
+                    }}
+                >
+                    <Text>⚙ 设置</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -203,6 +359,69 @@ const App = () => {
 };
 
 const styles = StyleSheet.create({
+    encourageText: {
+        fontSize: 16,
+        marginTop: 12,
+        paddingHorizontal: 20,
+        textAlign: 'center',
+        fontStyle: 'italic',
+        color: '#444',
+    },
+    searchBarContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+    },
+
+    inputWrapper: {
+        flex: 1,
+        position: 'relative',
+    },
+
+    textInput: {
+        height: 40,
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 6,
+        paddingHorizontal: 10, // 右边多点距离留给 ❌
+        backgroundColor: '#fff',
+    },
+
+    clearIcon: {
+        position: 'absolute',
+        right: 10,
+        top: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        paddingHorizontal: 6,
+    },
+
+    clearIconText: {
+        fontSize: 16,
+        color: '#888',
+    },
+
+    searchButton: {
+        marginLeft: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        backgroundColor: '#007bff',
+        borderRadius: 6,
+    },
+
+    searchButtonText: {
+        color: '#fff',
+        fontSize: 14,
+    },
+    progressBarContainer: {
+        height: 3,
+        backgroundColor: '#eee',
+    },
+    progressBar: {
+        height: 3,
+        backgroundColor: '#007bff',
+        // transition: 'width 0.2s',
+    },
     tabHeader: {
         flexDirection: 'row',
         backgroundColor: '#f0f0f0',
@@ -245,13 +464,6 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'white',
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
-    },
-    searchBarContainer: {
-        flexDirection: 'row',
-        padding: 8,
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderColor: '#ccc',
     },
     input: {
         flex: 1,
