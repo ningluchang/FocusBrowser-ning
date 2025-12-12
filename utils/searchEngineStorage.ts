@@ -7,5 +7,5 @@ export async function setDefaultSearchEngine(value: SearchEngineValue) {
 
 export async function getDefaultSearchEngine(): Promise<SearchEngineValue> {
     const saved = await AsyncStorage.getItem(SEARCH_ENGINE_KEY);
-    return (saved as SearchEngineValue) || 'bing'; // 默认用 Bing
+    return (saved as SearchEngineValue) || 'google'; // 默认用 google
 }

@@ -150,7 +150,13 @@ const App = () => {
                     onBack={back}
                     title="浏览历史"
                 >
-                    <HistoryPage />
+                    <HistoryPage
+                        onSelectUrl={url => {
+                            setIsInSettings(false);
+                            setSettingsPage('');
+                            handleLoadUrlFromHistory(url); // ✅ 真正跳转
+                        }}
+                    />
                 </SettingsContainer>
             );
 
@@ -217,6 +223,12 @@ const App = () => {
             setShowSettings(false);
             return true;
         }
+        // ✅ 网页加载中处理：先取消加载
+        if (webViewRef.current && progress < 1) {
+            webViewRef.current.stopLoading(); // ✅ 取消当前加载请求
+            setUrl(''); // 或者 goBack，如果你有追踪历史功能
+            return true;
+        }
 
         // 如果当前有网页
         if (url) {
@@ -229,10 +241,10 @@ const App = () => {
 
     useEffect(() => {
         const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-            if (isInSettings){
-                if (settingsPage !== ''){
+            if (isInSettings) {
+                if (settingsPage !== '') {
                     setSettingsPage('');
-                }else{
+                } else {
                     setIsInSettings(false);
                 }
                 return true;
@@ -328,7 +340,6 @@ const App = () => {
                     </View>
                 ) : (
                     <View style={styles.placeholder}>
-                        <Text style={styles.placeholderText}>欢迎使用自律浏览器</Text>
                         <Text style={styles.placeholderText}>请输入网址进行访问</Text>
                     </View>
                 )}
@@ -385,6 +396,8 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         paddingHorizontal: 10, // 右边多点距离留给 ❌
         backgroundColor: '#fff',
+        paddingBottom:-8
+        
     },
 
     clearIcon: {

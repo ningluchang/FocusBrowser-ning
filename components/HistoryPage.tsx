@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Modal } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Modal, TouchableWithoutFeedback } from 'react-native';
 import { getHistory, clearHistory, clearAllHistory, HistoryItem } from '../utils/historyStorage';
 
 const oneHour = 60 * 60 * 1000;
@@ -9,7 +9,7 @@ interface HistoryPageProps {
     onSelectUrl: (url: string) => void;
 }
 
-const HistoryPage = () => {
+const HistoryPage: React.FC<HistoryPageProps> = ({ onSelectUrl }) => {
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [showOptions, setShowOptions] = useState(false);
     const options = [
@@ -65,10 +65,12 @@ const HistoryPage = () => {
                     data={history}
                     keyExtractor={(item, index) => index.toString()}
                     renderItem={({ item }) => (
-                        <View style={styles.item}>
-                            <Text style={styles.url}>{item.url}</Text>
-                            <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
-                        </View>
+                        <TouchableOpacity onPress={() => onSelectUrl(item.url)}>
+                            <View style={styles.item}>
+                                <Text style={styles.url}>{item.url}</Text>
+                                <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
+                            </View>
+                        </TouchableOpacity>
                     )}
                 />
             )}
@@ -77,38 +79,44 @@ const HistoryPage = () => {
                 transparent
                 animationType="slide"
             >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        {options.map(item => (
-                            <TouchableOpacity
-                                key={item.label}
-                                onPress={() => {
-                                    clearRange(item.value);
-                                    setShowOptions(false);
-                                }}
-                                style={styles.optionButton}
-                            >
-                                <Text style={{ fontSize: 16 }}>{item.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                        <TouchableOpacity
-                            onPress={() => {
-                                clearAll();
-                                setShowOptions(false);
-                            }}
-                            style={[styles.optionButton, { backgroundColor: '#fdd' }]}
-                        >
-                            <Text style={{ fontSize: 16, color: 'red' }}>全部清除</Text>
-                        </TouchableOpacity>
+                {/* ✅ 全屏覆盖，空白区域可点击关闭 */}
+                <TouchableWithoutFeedback onPress={() => setShowOptions(false)}>
+                    <View style={styles.modalOverlay}>
+                        <TouchableWithoutFeedback>
+                            <View style={styles.modalContent}>
+                                {options.map(item => (
+                                    <TouchableOpacity
+                                        key={item.label}
+                                        onPress={() => {
+                                            clearRange(item.value);
+                                            setShowOptions(false);
+                                        }}
+                                        style={styles.optionButton}
+                                    >
+                                        <Text style={styles.optionText}>{item.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
 
-                        <TouchableOpacity
-                            onPress={() => setShowOptions(false)}
-                            style={styles.optionButton}
-                        >
-                            <Text style={{ fontSize: 16 }}>取消</Text>
-                        </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        clearAll();
+                                        setShowOptions(false);
+                                    }}
+                                    style={[styles.optionButton, { backgroundColor: '#fdd' }]}
+                                >
+                                    <Text style={{ fontSize: 16, color: 'black', textAlign: 'center' }}>全部清除</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    onPress={() => setShowOptions(false)}
+                                    style={styles.optionButton}
+                                >
+                                    <Text style={styles.optionText}>取消</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </TouchableWithoutFeedback>
                     </View>
-                </View>
+                </TouchableWithoutFeedback>
             </Modal>
 
             <TouchableOpacity
@@ -125,19 +133,30 @@ const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
         justifyContent: 'flex-end',
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        marginBottom: 21,
     },
+
     modalContent: {
         backgroundColor: '#fff',
         padding: 14,
         borderTopLeftRadius: 12,
         borderTopRightRadius: 12,
+        paddingBottom: 0, // ✅ 多一点底部，不遮住按钮
+        marginBottom: -1, // ✅ 抬高整体Modal
     },
+
     optionButton: {
-        paddingVertical: 12,
+        paddingVertical: 14,
         borderBottomWidth: 1,
         borderColor: '#eee',
     },
+
+    optionText: {
+        fontSize: 16,
+        textAlign: 'center',
+    },
+
     container: {
         flex: 1,
         padding: 12,

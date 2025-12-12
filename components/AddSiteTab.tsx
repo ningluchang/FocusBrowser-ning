@@ -64,6 +64,7 @@ const AddSiteTab = () => {
                     borderRadius: 6,
                     paddingHorizontal: 10,
                     height: 40,
+                    paddingBottom: -8,
                     marginBottom: 10,
                 }}
             />
