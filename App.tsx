@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { SafeAreaView, View, TextInput, Button, StyleSheet, StatusBar, Platform, Text, TouchableOpacity, Alert, BackHandler } from 'react-native';
+import { View, TextInput, Button, StyleSheet, StatusBar, Platform, Text, TouchableOpacity, Alert, BackHandler } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { addToBlacklist, isUrlBlocked } from './utils/blacklist';
 import { formatDuration } from './utils/time_fmt';
@@ -14,6 +14,7 @@ import { encouragements } from './utils/encouragements';
 import { saveHistory } from './utils/historyStorage';
 import HistoryPage from './components/HistoryPage';
 import SettingsContainer from './components/SettingsContainer';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 
 const App = () => {
     const [url, setUrl] = useState<string>(''); // 当前加载的 URL
@@ -32,6 +33,7 @@ const App = () => {
     const [encourage, setEncourage] = useState('');
     const [isInSettings, setIsInSettings] = useState(false);
     const [settingsPage, setSettingsPage] = useState<string>(''); // '' 表示主设置页
+    const [canGoBack, setCanGoBack] = useState(false);
 
     function isLikelyUrl(input: string): boolean {
         if (input.includes(' ')) return false; // 空格 -> 明显是关键词
@@ -230,6 +232,12 @@ const App = () => {
             return true;
         }
 
+        // ✅ 新加的网页内后退逻辑
+        if (webViewRef.current && canGoBack) {
+            webViewRef.current.goBack();
+            return true;
+        }
+
         // 如果当前有网页
         if (url) {
             setUrl('');
@@ -257,115 +265,120 @@ const App = () => {
     }, [showBlocked, showSettings, tabIndex, url]);
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <StatusBar
-                barStyle="dark-content"
-                backgroundColor="white"
-                translucent={false}
-            />
+        <SafeAreaProvider>
+            <SafeAreaView style={styles.safeArea}>
+                <StatusBar
+                    barStyle="dark-content"
+                    backgroundColor="white"
+                    translucent={false}
+                />
 
-            {/* 地址栏 */}
-            <View style={styles.searchBarContainer}>
-                <View style={styles.inputWrapper}>
-                    <TextInput
-                        style={styles.textInput}
-                        value={inputUrl}
-                        onChangeText={setInputUrl}
-                        placeholder="请输入网址或搜索关键词"
-                        returnKeyType="go"
-                        onSubmitEditing={handleLoad}
-                    />
+                {/* 地址栏 */}
+                <View style={styles.searchBarContainer}>
+                    <View style={styles.inputWrapper}>
+                        <TextInput
+                            style={styles.textInput}
+                            value={inputUrl}
+                            onChangeText={setInputUrl}
+                            placeholder="请输入网址或搜索关键词"
+                            returnKeyType="go"
+                            onSubmitEditing={handleLoad}
+                        />
 
-                    {/* 内嵌的清除按钮 */}
-                    {inputUrl.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() => setInputUrl('')}
-                            style={styles.clearIcon}
-                        >
-                            <Text style={styles.clearIconText}>✖</Text>
-                        </TouchableOpacity>
+                        {/* 内嵌的清除按钮 */}
+                        {inputUrl.length > 0 && (
+                            <TouchableOpacity
+                                onPress={() => setInputUrl('')}
+                                style={styles.clearIcon}
+                            >
+                                <Text style={styles.clearIconText}>✖</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* 外部的“前往”按钮 */}
+                    <TouchableOpacity
+                        onPress={handleLoad}
+                        style={styles.searchButton}
+                    >
+                        <Text style={styles.searchButtonText}>前往</Text>
+                    </TouchableOpacity>
+                </View>
+                {/* ✅ 加进度条组件在搜索框下 */}
+                {progress < 1 && (
+                    <View style={styles.progressBarContainer}>
+                        <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+                    </View>
+                )}
+
+                {/* 内容区域 */}
+                <View style={styles.content}>
+                    {isInSettings ? (
+                        renderSettingsPage()
+                    ) : url && !showBlocked ? (
+                        <WebView
+                            ref={webViewRef}
+                            source={{ uri: url }}
+                            style={styles.webview}
+                            onLoadProgress={({ nativeEvent }) => {
+                                setProgress(nativeEvent.progress);
+                            }}
+                            onShouldStartLoadWithRequest={request => {
+                                const currentAllowed = allowUrlRef.current;
+                                return !!currentAllowed && request.url.startsWith(currentAllowed);
+                            }}
+                            onLoadEnd={() => {
+                                if (url) {
+                                    saveHistory(url);
+                                }
+                            }}
+                            onNavigationStateChange={navState => {
+                                setCanGoBack(navState.canGoBack);
+                            }}
+                        />
+                    ) : showBlocked ? (
+                        <View style={styles.blockedContainer}>
+                            <Text style={styles.blockedTitle}>⚠️ 网站已被锁定</Text>
+
+                            {blockedSiteInfo && (
+                                <>
+                                    <Text style={styles.blockedText}>你试图访问：{blockedSiteInfo.site}</Text>
+                                    <Text style={styles.blockedText}>剩余时间：{formatDuration(blockedSiteInfo.remainingMs)}</Text>
+                                    <Text style={styles.blockedText}>请关闭此页面，回归专注</Text>
+                                </>
+                            )}
+
+                            <Text style={styles.encourageText}>{encourage}</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.placeholder}>
+                            <Text style={styles.placeholderText}>请输入网址进行访问</Text>
+                        </View>
                     )}
                 </View>
 
-                {/* 外部的“前往”按钮 */}
-                <TouchableOpacity
-                    onPress={handleLoad}
-                    style={styles.searchButton}
-                >
-                    <Text style={styles.searchButtonText}>前往</Text>
-                </TouchableOpacity>
-            </View>
-            {/* ✅ 加进度条组件在搜索框下 */}
-            {progress < 1 && (
-                <View style={styles.progressBarContainer}>
-                    <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+                {/* 底部工具栏 */}
+                <View style={styles.toolbar}>
+                    <TouchableOpacity onPress={handleBack}>
+                        <Text>◀ 返回</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={goForward}>
+                        <Text style={styles.toolButton}>▶ 前进</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={reload}>
+                        <Text style={styles.toolButton}>↻ 刷新</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => {
+                            setIsInSettings(true);
+                            setSettingsPage(''); // 主设置页
+                        }}
+                    >
+                        <Text>⚙ 设置</Text>
+                    </TouchableOpacity>
                 </View>
-            )}
-
-            {/* 内容区域 */}
-            <View style={styles.content}>
-                {isInSettings ? (
-                    renderSettingsPage()
-                ) : url && !showBlocked ? (
-                    <WebView
-                        ref={webViewRef}
-                        source={{ uri: url }}
-                        style={styles.webview}
-                        onLoadProgress={({ nativeEvent }) => {
-                            setProgress(nativeEvent.progress);
-                        }}
-                        onShouldStartLoadWithRequest={request => {
-                            const currentAllowed = allowUrlRef.current;
-                            return !!currentAllowed && request.url.startsWith(currentAllowed);
-                        }}
-                        onLoadEnd={() => {
-                            if (url) {
-                                saveHistory(url);
-                            }
-                        }}
-                    />
-                ) : showBlocked ? (
-                    <View style={styles.blockedContainer}>
-                        <Text style={styles.blockedTitle}>⚠️ 网站已被锁定</Text>
-
-                        {blockedSiteInfo && (
-                            <>
-                                <Text style={styles.blockedText}>你试图访问：{blockedSiteInfo.site}</Text>
-                                <Text style={styles.blockedText}>剩余时间：{formatDuration(blockedSiteInfo.remainingMs)}</Text>
-                                <Text style={styles.blockedText}>请关闭此页面，回归专注</Text>
-                            </>
-                        )}
-
-                        <Text style={styles.encourageText}>{encourage}</Text>
-                    </View>
-                ) : (
-                    <View style={styles.placeholder}>
-                        <Text style={styles.placeholderText}>请输入网址进行访问</Text>
-                    </View>
-                )}
-            </View>
-
-            {/* 底部工具栏 */}
-            <View style={styles.toolbar}>
-                <TouchableOpacity onPress={handleBack}>
-                    <Text>◀ 返回</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={goForward}>
-                    <Text style={styles.toolButton}>▶ 前进</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={reload}>
-                    <Text style={styles.toolButton}>↻ 刷新</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    onPress={() => {
-                        setIsInSettings(true);
-                        setSettingsPage(''); // 主设置页
-                    }}
-                >
-                    <Text>⚙ 设置</Text>
-                </TouchableOpacity>
-            </View>
-        </SafeAreaView>
+            </SafeAreaView>
+        </SafeAreaProvider>
     );
 };
 
@@ -396,8 +409,7 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         paddingHorizontal: 10, // 右边多点距离留给 ❌
         backgroundColor: '#fff',
-        paddingBottom:-8
-        
+        paddingBottom: -8,
     },
 
     clearIcon: {
