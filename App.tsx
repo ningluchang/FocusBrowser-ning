@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, TextInput, Button, StyleSheet, StatusBar, Platform, Text, TouchableOpacity, Alert, BackHandler } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { addToBlacklist, isUrlBlocked } from './utils/blacklist';
+import { addToBlacklist, isUrlBlocked, getBlacklist } from './utils/blacklist';
 import { formatDuration } from './utils/time_fmt';
 import BlacklistConfig from './components/BlacklistConfig';
 import AddSiteTab from './components/AddSiteTab';
@@ -34,6 +34,7 @@ const App = () => {
     const [isInSettings, setIsInSettings] = useState(false);
     const [settingsPage, setSettingsPage] = useState<string>(''); // '' 表示主设置页
     const [canGoBack, setCanGoBack] = useState(false);
+    const [blockedDomains, setBlockedDomains] = useState<string[]>([]);
 
     function isLikelyUrl(input: string): boolean {
         if (input.includes(' ')) return false; // 空格 -> 明显是关键词
@@ -264,6 +265,14 @@ const App = () => {
         return () => backHandler.remove();
     }, [showBlocked, showSettings, tabIndex, url]);
 
+    useEffect(() => {
+        const loadBlockList = async () => {
+            const list = await getBlacklist();
+            setBlockedDomains(list.map(item => item.url));
+        };
+        loadBlockList();
+    }, []);
+
     return (
         <SafeAreaProvider>
             <SafeAreaView style={styles.safeArea}>
@@ -324,8 +333,21 @@ const App = () => {
                                 setProgress(nativeEvent.progress);
                             }}
                             onShouldStartLoadWithRequest={request => {
-                                const currentAllowed = allowUrlRef.current;
-                                return !!currentAllowed && request.url.startsWith(currentAllowed);
+                                const url = request.url;
+                                const matched = blockedDomains.find(domain => url.includes(domain.replace(/^www\./, '')));
+
+                                if (matched) {
+                                    setUrl('about:blank');
+                                    setShowBlocked(true);
+                                    setBlockedSiteInfo({
+                                        site: matched,
+                                        remainingMs: 999999,
+                                    });
+                                    setEncourage(encouragements[Math.floor(Math.random() * encouragements.length)]);
+                                    return false;
+                                }
+
+                                return true;
                             }}
                             onLoadEnd={() => {
                                 if (url) {
