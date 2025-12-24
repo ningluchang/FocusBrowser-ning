@@ -38,6 +38,11 @@ VOID 是一款极简、不可破防、自律优先的 Android 浏览器，适合
 pnpm install
 ```
 
+运行调试：
+```bash
+npx react-native run-android
+```
+
 打包 APK:
 ```bash
 cd android
