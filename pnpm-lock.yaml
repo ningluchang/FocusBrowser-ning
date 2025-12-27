@@ -20,6 +20,9 @@ importers:
       react-native:
         specifier: 0.82.1
         version: 0.82.1(@babel/core@7.28.5)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.82.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.1.1)
+      react-native-orientation-locker:
+        specifier: ^1.7.0
+        version: 1.7.0(react-native@0.82.1(@babel/core@7.28.5)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.82.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.1.1))(react@19.1.1)
       react-native-safe-area-context:
         specifier: ^5.5.2
         version: 5.6.2(react-native@0.82.1(@babel/core@7.28.5)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.82.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.1.1))(react@19.1.1)
@@ -2889,6 +2892,16 @@ packages:
 
   react-is@19.2.1:
     resolution: {integrity: sha512-L7BnWgRbMwzMAubQcS7sXdPdNLmKlucPlopgAzx7FtYbksWZgEWiuYM5x9T6UqS2Ne0rsgQTq5kY2SGqpzUkYA==}
+
+  react-native-orientation-locker@1.7.0:
+    resolution: {integrity: sha512-2PhG4UyRJktb3KCTISStuu8/q+Q3q3oPesGg9DhdY0b6Cu/ZzxkCvkbJte2TPWRYkS0JpClimvqVaonulGvDrA==}
+    peerDependencies:
+      react: '>=16.13.1'
+      react-native: '>=0.63.2'
+      react-native-windows: '>=0.63.3'
+    peerDependenciesMeta:
+      react-native-windows:
+        optional: true
 
   react-native-safe-area-context@5.6.2:
     resolution: {integrity: sha512-4XGqMNj5qjUTYywJqpdWZ9IG8jgkS3h06sfVjfw5yZQZfWnRFXczi0GnYyFyCc2EBps/qFmoCH8fez//WumdVg==}
@@ -7223,6 +7236,11 @@ snapshots:
   react-is@18.3.1: {}
 
   react-is@19.2.1: {}
+
+  react-native-orientation-locker@1.7.0(react-native@0.82.1(@babel/core@7.28.5)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.82.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.1.1))(react@19.1.1):
+    dependencies:
+      react: 19.1.1
+      react-native: 0.82.1(@babel/core@7.28.5)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.82.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.1.1)
 
   react-native-safe-area-context@5.6.2(react-native@0.82.1(@babel/core@7.28.5)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.82.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.1.1))(react@19.1.1):
     dependencies:

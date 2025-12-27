@@ -15,6 +15,7 @@ import { saveHistory } from './utils/historyStorage';
 import HistoryPage from './components/HistoryPage';
 import SettingsContainer from './components/SettingsContainer';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import Orientation from 'react-native-orientation-locker';
 
 const App = () => {
     const [url, setUrl] = useState<string>(''); // 当前加载的 URL
@@ -273,6 +274,15 @@ const App = () => {
         loadBlockList();
     }, []);
 
+    useEffect(() => {
+        Orientation.unlockAllOrientations();
+
+        return () => {
+            Orientation.lockToPortrait(); // 回到竖屏
+        };
+    }, []);
+
+
     return (
         <SafeAreaProvider>
             <SafeAreaView style={styles.safeArea}>
@@ -326,6 +336,12 @@ const App = () => {
                         renderSettingsPage()
                     ) : url && !showBlocked ? (
                         <WebView
+                            javaScriptEnabled={true}
+                            domStorageEnabled={true}
+                            allowsFullscreenVideo={true} // ✅ 支持视频全屏（核心！）
+                            mediaPlaybackRequiresUserAction={false} // ✅ 自动播放优化（可选）
+                            allowsInlineMediaPlayback={true} // ✅ 支持 HTML 视频标签
+                            originWhitelist={['*']} // 可加载所有外域网页
                             ref={webViewRef}
                             source={{ uri: url }}
                             style={styles.webview}
@@ -356,6 +372,9 @@ const App = () => {
                             }}
                             onNavigationStateChange={navState => {
                                 setCanGoBack(navState.canGoBack);
+                                if (navState.url.includes('fullscreen') && navState.url.includes('video')) {
+                                    Orientation.lockToLandscape(); // 横屏
+                                }
                             }}
                         />
                     ) : showBlocked ? (
